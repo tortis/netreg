@@ -1,0 +1,18 @@
+<div class="container">
+	<div class="row">
+		<div class="col-md-3"></div>
+		<form class="form col-md-6">
+			<div class="alert alert-danger" ng-show="loginErr">{{loginErr}}</div>
+			<div class="form-group">
+				<input ng-model="loginform.un" class="form-control input-lg" placeholder="Username" type="text" required>
+			</div>
+			<div class="form-group">
+				<input ng-model="loginform.pw" class="form-control input-lg" placeholder="Password" type="password" required>
+			</div>
+			<div class="from-group">
+				<button ng-click="login(loginform)" class="btn btn-primary btn-lg btn-block">Sign In</button>
+			</div>
+		</form>
+		<div class="col-md-3"></div>
+	</div>
+</div>

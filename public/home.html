@@ -1,0 +1,71 @@
+<div class="container">
+	<div ng-show="error" class="alert alert-danger alert-dismissible">
+		<button type="button" class="close" ng-click="error = null"><span aria-hidden="true">&times;</span></button>
+		<strong>Error</strong> {{error}}
+	</div>
+	<div ng-show="message" class="alert alert-info alert-dismissible">
+		<button type="button" class="close" ng-click="message = null"><span aria-hidden="true">&times;</span></button>
+		{{message}}
+	</div>
+	<div class="panel panel-default">
+		<div class="panel-heading">Registered Devices</div>
+		<div class="panel-body">
+			<p>Below is a list of devices registered to you. Please remove any devices that you do not recognize.</p>	
+		</div>
+		<table class="table table-hover">
+			<tr>
+				<th>Device Name</th>
+				<th>Owner</th>
+				<th>MAC Address</th>
+				<th>Actions</th>
+			</tr>
+			<tr ng-repeat="device in devices" ng-class="{success: device.Enabled}">
+				<td ng-hide="device.editing">{{device.Device}}</td>
+				<td ng-show="device.editing"><input type="text" ng-model="device.updated.Device"></td>
+				<td>{{device.Owner}}</td>
+				<td ng-hide="device.editing">{{device.MAC}}</td>
+				<td ng-show="device.editing"><input type="text" ng-model="device.updated.MAC"></td>
+				<td>
+					<div ng-hide="device.editing">
+						<button ng-click="toggleEnable(device)" style="min-width: 55px;" type="button" class="btn btn-default btn-xs">
+							{{device.Enabled ? "Disable" : "Enable"}}
+						</button>
+						<button ng-click="startEditing(device)" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-edit"</span>
+						</button>
+						<button ng-click="deleteDevice(device)" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-trash"</span>
+						</button>
+					</div>
+					<div ng-show="device.editing">
+						<button ng-click="updateDevice(device)" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-ok"</span>
+						</button>
+						<button ng-click="device.editing=false" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-remove"</span>
+						</button>
+					</div>
+				</td>
+			</tr>
+			<tr ng-show="devices.length == 0">
+				<td colspan="4"><i>No devices registered.</i></td>
+			</tr>
+			<tr ng-hide="devices.adding">
+				<td colspan="4"><button ng-click="startAdding()" type="button" class="btn btn-success btn-xs">Add a New Device"</button></td>
+			</tr>
+			<tr ng-show="devices.adding">
+				<td><input type="text" ng-model="devices.newDev.Device" placeholder="My-Device"></td>
+				<td>Me</td>
+				<td><input type="text" ng-model="devices.newDev.MAC" placeholder="00:00:00:00:00:00"></td>
+				<td>
+					<button ng-click="addDevice()" type="button" class="btn btn-default btn-xs">
+						<span class="glyphicon glyphicon-ok"</span>
+					</button>
+					<button ng-click="devices.adding=false" type="button" class="btn btn-default btn-xs">
+						<span class="glyphicon glyphicon-remove"</span>
+					</button>
+				</td>
+			</tr>
+		</table>
+	</div>
+</div>
