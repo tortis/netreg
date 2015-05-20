@@ -16,13 +16,13 @@ func (d *Device) String() string {
 	return fmt.Sprintf("OWNER: %s DEVICE: %s (%s)", d.Owner, d.Device, d.MAC)
 }
 
-type ByName []sortableKey
-
 type sortableKey struct {
 	Name    string
 	MAC     string
 	Enabled bool
 }
+
+type ByName []sortableKey
 
 func (a ByName) Len() int      { return len(a) }
 func (a ByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
