@@ -40,7 +40,32 @@ netregApp.controller("LoginCtrl", function($scope, $http, $location, $window) {
 	};	
 });
 
-netregApp.controller("HomeCtrl", function($scope, $http, $window) {
+netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
+	// Token management
+	$scope.getToken = function() {
+		var token = $window.localStorage['token'];
+		if (!token) {
+			return null;
+		}
+		var tokenBody = token.split('.')[1];
+		var tokenJson = atob(tokenBody);
+		return JSON.parse(tokenJson);
+	};
+	$scope.token = $scope.getToken();
+	if (!$scope.token) {
+		$location.path("/");
+		return;
+	}
+	if ($scope.token.exp < (Math.floor(Date.now() / 1000))) {
+		$location.path("/");
+		return;
+	}
+	$scope.username = $scope.token.contents.username;
+	if ($scope.token.contents.admin == "yes") {
+		$scope.isAdmin = true;
+	}
+
+	// Load data
 	$scope.load = function() {
 		$scope.message = $scope.error = null;
 		$http({
@@ -56,11 +81,19 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window) {
 	};
 	$scope.load();
 
+
+	// Functions
+	$scope.signout = function() {
+		$window.localStorage['token'] = null;
+		$location.path("/");
+	};
+
 	$scope.startEditing = function(dev) {
 		dev.updated = {};
 		dev.updated.MAC = dev.MAC;
 		dev.updated.Device = dev.Device;
 		dev.updated.Enabled = dev.Enabled;
+		dev.updated.Owner = dev.Owner;
 		dev.editing = true;
 	};
 
@@ -78,6 +111,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window) {
 	}
 
 	$scope.updateDevice = function(dev) {
+		console.log("Updating device: "+dev.Name);
 		$http({
 			method: 'PUT',
 			url: '/devices/' + dev.MAC,

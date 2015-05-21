@@ -87,12 +87,6 @@ func (m *DeviceManager) Load() error {
 			MAC:     *MACString,
 			Enabled: enabled,
 		}
-		k := sortableKey{
-			Name:    *name,
-			MAC:     *MACString,
-			Enabled: enabled,
-		}
-		m.keys = append(m.keys, k)
 		// Attempt to parse username from device name
 		nameTokens := strings.SplitN(*name, "-", 2)
 		if len(nameTokens) > 1 {
@@ -103,9 +97,8 @@ func (m *DeviceManager) Load() error {
 			d.Device = nameTokens[0]
 		}
 
-		m.devices[d.MAC] = d
+		m.Add(d)
 	}
-	sort.Sort(ByName(m.keys))
 	return nil
 }
 
@@ -122,7 +115,20 @@ func (dm *DeviceManager) Get(mac string) *Device {
 	return dm.devices[mac]
 }
 
+func (dm *DeviceManager) Set(d *Device) {
+	if _, e := dm.devices[d.MAC]; !e {
+		return
+	}
+	dm.Remove(d.MAC)
+	dm.Add(d)
+}
+
 func (dm *DeviceManager) Add(d *Device) {
+	// Do nothing if the device already exists.
+	if _, e := dm.devices[d.MAC]; e {
+		return
+	}
+
 	k := sortableKey{
 		Name:    d.Name,
 		MAC:     d.MAC,
@@ -154,6 +160,15 @@ func (dm *DeviceManager) ListForUser(owner string) []*Device {
 	return result
 }
 
+func (dm *DeviceManager) ListAll() []*Device {
+	result := make([]*Device, 0, len(dm.devices))
+	for _, k := range dm.keys {
+		d := dm.devices[k.MAC]
+		result = append(result, d)
+	}
+	return result
+}
+
 func (dm *DeviceManager) Contains(mac string) bool {
 	if _, exists := dm.devices[mac]; exists {
 		return true
@@ -172,6 +187,11 @@ func (dm *DeviceManager) String() string {
 
 	for _, k := range dm.keys {
 		dev := dm.devices[k.MAC]
+		// TODO
+		// FIXME
+		if dev == nil {
+			log.Fatal("Found the problem")
+		}
 		if dev.Enabled {
 			result += fmt.Sprintf("   host %s-%s { hardware ethernet %s; }\n", dev.Owner, dev.Device, dev.MAC)
 		} else {

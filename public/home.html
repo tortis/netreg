@@ -8,7 +8,7 @@
 		{{message}}
 	</div>
 	<div class="panel panel-default">
-		<div class="panel-heading">Registered Devices</div>
+		<div class="panel-heading">Registered Devices<span class="pull-right">{{username}} <button ng-click="signout()" type="button" class="btn btn-primary btn-xs">Signout</button></span></div>
 		<div class="panel-body">
 			<p>Below is a list of devices registered to you. Please remove any devices that you do not recognize.</p>	
 		</div>
@@ -22,7 +22,8 @@
 			<tr ng-repeat="device in devices" ng-class="{success: device.Enabled}">
 				<td ng-hide="device.editing">{{device.Device}}</td>
 				<td ng-show="device.editing"><input type="text" ng-model="device.updated.Device"></td>
-				<td>{{device.Owner}}</td>
+				<td ng-hide="device.editing && isAdmin">{{device.Owner}}</td>
+				<td ng-show="device.editing && isAdmin"><input type="text" ng-model="device.updated.Owner"></td>
 				<td ng-hide="device.editing">{{device.MAC}}</td>
 				<td ng-show="device.editing"><input type="text" ng-model="device.updated.MAC"></td>
 				<td>
@@ -51,11 +52,12 @@
 				<td colspan="4"><i>No devices registered.</i></td>
 			</tr>
 			<tr ng-hide="devices.adding">
-				<td colspan="4"><button ng-click="startAdding()" type="button" class="btn btn-success btn-xs">Add a New Device"</button></td>
+				<td colspan="4"><button ng-click="startAdding()" type="button" class="btn btn-success btn-xs">Add a New Device</button></td>
 			</tr>
 			<tr ng-show="devices.adding">
 				<td><input type="text" ng-model="devices.newDev.Device" placeholder="My-Device"></td>
-				<td>Me</td>
+				<td ng-show="isAdmin"><input type="text" ng-model="devices.newDev.Owner" placeholder="username"></td>
+				<td ng-hide="isAdmin">Me</td>
 				<td><input type="text" ng-model="devices.newDev.MAC" placeholder="00:00:00:00:00:00"></td>
 				<td>
 					<button ng-click="addDevice()" type="button" class="btn btn-default btn-xs">

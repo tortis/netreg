@@ -1,41 +1,64 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mavricknz/ldap"
+
 	"github.com/tortis/netreg/devm"
 	"github.com/tortis/netreg/token"
 )
 
-const LDAP_PATH = "uid=%s,ou=people,dc=math,dc=nor,dc=ou,dc=edu"
+const ADMIN_USERNAME = "netregadmin"
+const ADMIN_PASSWORD = "password"
+
+var ldapSearchPath string
+var webPort string
+var ldapServer string
+var ldapPort int
+var dhcpdConfigFile string
+var dhcpdRestartCmd string
 
 var ldapConn *ldap.LDAPConnection
 var deviceManager *devm.DeviceManager
-var key []byte = []byte("fj2389ruhj8hfj2039d8j23")
+var key []byte
+
+func init() {
+	flag.StringVar(&webPort, "web-port", ":3000", "port that the web server will listen on.")
+	flag.StringVar(&ldapServer, "ldap-server", "localhost", "LDAP server to connect to.")
+	flag.IntVar(&ldapPort, "ldap-port", 389, "Port to connect to LDAP server on.")
+	flag.StringVar(&ldapSearchPath, "ldap-search-path", "uid=%s,ou=people,dc=math,dc=nor,dc=ou,dc=edu", "Format string for ldap bind DN")
+	flag.StringVar(&dhcpdConfigFile, "dhcpd-conf-file", "/etc/dhcp/dhcpd.conf", "dhcpd config file to use.")
+	flag.StringVar(&dhcpdRestartCmd, "dhcpd-restart", "service dhcpd restart", "command to restart the dhcp server.")
+
+	// Generate a random token key
+	rand.Read(key)
+}
 
 func main() {
+	flag.Parse()
 	// Start the config file manager (device manager)
-	deviceManager = devm.NewDeviceManager("test.config")
+	deviceManager = devm.NewDeviceManager(dhcpdConfigFile)
 	err := deviceManager.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Loaded ", deviceManager.NumDevices(), " devices.")
+	log.Println("Loaded ", deviceManager.NumDevices(), " devices.")
 
 	// Start the ldap connection
-	ldapConn = ldap.NewLDAPConnection("origin.math.nor.ou.edu", 389)
-	err = ldapConn.Connect()
+	err = ldapConnect()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to connect to LDAP server. Stopping")
 	}
-	defer ldapConn.Close()
 
 	// Create the routing mux
 	router := mux.NewRouter()
@@ -46,7 +69,19 @@ func main() {
 	router.HandleFunc("/devices/{did}", updateDevice).Methods("PUT")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./public")))
 
-	log.Fatal(http.ListenAndServe(":3000", router))
+	log.Println("Serving requests on ", webPort)
+	log.Fatal(http.ListenAndServe(webPort, router))
+}
+
+func ldapConnect() error {
+	ldapConn = ldap.NewLDAPConnection(ldapServer, uint16(ldapPort))
+	ldapConn.NetworkConnectTimeout = time.Second * 10
+	ldapConn.ReadTimeout = time.Second * 10
+	err := ldapConn.Connect()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,13 +89,47 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("un")
 	password := r.FormValue("pw")
 
+	// Check if admin login
+	if username == ADMIN_USERNAME {
+		if password == ADMIN_PASSWORD {
+			t := token.NewToken(token.EXP_6HOUR)
+			t.Contents["username"] = username
+			t.Contents["admin"] = "yes"
+			res, err := t.Sign(key)
+			if err != nil {
+				log.Println("Failed to generate token for user.")
+				http.Error(w, "Could not generate token", http.StatusInternalServerError)
+				return
+			}
+			w.Write(res)
+			return
+		}
+	}
+
 	// Attempt LDAP bind
-	ldapUser := fmt.Sprintf(LDAP_PATH, username)
-	err := ldapConn.Bind(ldapUser, password)
-	if err != nil {
-		log.Println("User failed to authenticate")
-		http.Error(w, "Incorrect username or password", http.StatusBadRequest)
-		return
+	ldapUser := fmt.Sprintf(ldapSearchPath, username)
+	lde := ldapConn.Bind(ldapUser, password)
+	if lde != nil {
+		// Check if the connection is still alive
+		ldapError := lde.(*ldap.LDAPError)
+		if ldapError.ResultCode == ldap.ErrorClosing {
+			// The LDAP connection is down, attempt to reconnect
+			log.Println("The LDAP connection has been lost. Attempting to reconnect.")
+			err := ldapConnect()
+			if err != nil {
+				log.Println("Failed to reestablish LDAP connection. Quiting.")
+				http.Error(w, "Oops, could not connect to user database.", http.StatusInternalServerError)
+				log.Fatal(err)
+			}
+			log.Println("LDAP connection reestablished.")
+			loginHandler(w, r)
+			return
+		} else {
+			log.Println("User failed to authenticate")
+			http.Error(w, "Incorrect username or password", http.StatusBadRequest)
+			log.Println("[LOGIN](fail) ", username)
+			return
+		}
 	}
 
 	// Create JWT
@@ -73,6 +142,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(res)
+	log.Println("[LOGIN](success) ", username)
 }
 
 func listDevices(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +153,12 @@ func listDevices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Loop up devices using the device manager
-	devices := deviceManager.ListForUser(t.Contents["username"])
+	var devices []*devm.Device
+	if t.Contents["username"] == ADMIN_USERNAME {
+		devices = deviceManager.ListAll()
+	} else {
+		devices = deviceManager.ListForUser(t.Contents["username"])
+	}
 
 	// Encode as json and write
 	encoder := json.NewEncoder(w)
@@ -93,6 +168,7 @@ func listDevices(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server failed to generate response", http.StatusInternalServerError)
 		return
 	}
+	log.Println("[LIST](", len(devices), "devices ) ", t.Contents["username"])
 }
 
 func removeDevice(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +185,7 @@ func removeDevice(w http.ResponseWriter, r *http.Request) {
 	if deviceManager.Contains(mac) {
 		dev := deviceManager.Get(mac)
 		// Check if caller is owner
-		if t.Contents["username"] != dev.Owner {
+		if t.Contents["username"] != dev.Owner && t.Contents["username"] != ADMIN_USERNAME {
 			http.Error(w, "No such device exists.", http.StatusBadRequest)
 			return
 		}
@@ -122,6 +198,7 @@ func removeDevice(w http.ResponseWriter, r *http.Request) {
 	deviceManager.Remove(mac)
 	deviceManager.Save()
 	fmt.Fprint(w, "Device removed successfully.")
+	log.Println("[REMOVE](", mac, " ) ", t.Contents["username"])
 }
 
 func addDevice(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +226,9 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 	newDevice.MAC = mac.String()
 	re := regexp.MustCompile("[^0-9a-zA-Z\\-]")
 	newDevice.Device = re.ReplaceAllString(newDevice.Device, "")
-	newDevice.Owner = t.Contents["username"]
+	if t.Contents["username"] != ADMIN_USERNAME {
+		newDevice.Owner = t.Contents["username"]
+	}
 	newDevice.Name = newDevice.Owner + "-" + newDevice.Device
 	newDevice.Enabled = true
 
@@ -171,6 +250,7 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server failed to generate response", http.StatusInternalServerError)
 		return
 	}
+	log.Println("[ADD](", newDevice.MAC, " ) ", t.Contents["username"])
 }
 
 func updateDevice(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +262,11 @@ func updateDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Get old MAC from url
 	oldMAC := mux.Vars(r)["did"]
+	oldDev := deviceManager.Get(oldMAC)
+	if oldDev == nil {
+		http.Error(w, "Device does not exist.", http.StatusBadRequest)
+		return
+	}
 
 	// Parse device from request body
 	changedDevice := new(devm.Device)
@@ -201,18 +286,13 @@ func updateDevice(w http.ResponseWriter, r *http.Request) {
 	changedDevice.MAC = mac.String()
 	re := regexp.MustCompile("[^0-9a-zA-Z\\-]")
 	changedDevice.Device = re.ReplaceAllString(changedDevice.Device, "")
-	changedDevice.Owner = t.Contents["username"]
+	changedDevice.Owner = oldDev.Owner
 	changedDevice.Name = changedDevice.Owner + "-" + changedDevice.Device
 
-	// Update in device manager
+	// If the mac has not changed
 	if oldMAC == changedDevice.MAC {
-		if deviceManager.Contains(oldMAC) {
-			deviceManager.Add(changedDevice)
-		} else {
-			http.Error(w, "Device does not exist.", http.StatusBadRequest)
-			return
-		}
-	} else {
+		deviceManager.Set(changedDevice)
+	} else { // If the mac has changed, create a new device
 		if deviceManager.Contains(changedDevice.MAC) {
 			http.Error(w, "This MAC address is already registered.", http.StatusBadRequest)
 			return
@@ -220,9 +300,7 @@ func updateDevice(w http.ResponseWriter, r *http.Request) {
 		deviceManager.Remove(oldMAC)
 		deviceManager.Add(changedDevice)
 	}
-	log.Println("Saving device manager")
 	deviceManager.Save()
-	log.Println("Finished save")
 
 	// Encode as json and write
 	encoder := json.NewEncoder(w)
@@ -233,6 +311,7 @@ func updateDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server failed to generate response", http.StatusInternalServerError)
 		return
 	}
+	log.Println("[UPDATE](", changedDevice.MAC, " ) ", t.Contents["username"])
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) *token.Token {
@@ -249,6 +328,7 @@ func validateToken(w http.ResponseWriter, r *http.Request) *token.Token {
 			http.Error(w, "Invalid token", http.StatusBadRequest)
 			return nil
 		} else {
+			log.Println(err)
 			http.Error(w, "Server failed to process token.", http.StatusInternalServerError)
 			return nil
 		}

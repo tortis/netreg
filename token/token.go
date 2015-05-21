@@ -100,8 +100,9 @@ func Validate(token []byte, key []byte) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
+	jsonBytes = bytes.TrimRight(jsonBytes, "\x00")
 	t := new(Token)
-	err = json.Unmarshal(jsonBytes[:len(jsonBytes)-1], t) // bytes.Split leaves null character at the end of the string that json does not like
+	err = json.Unmarshal(jsonBytes[:len(jsonBytes)], t) // bytes.Split leaves null character at the end of the string that json does not like
 	if err != nil {
 		return nil, err
 	}
