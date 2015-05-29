@@ -7,24 +7,30 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type DeviceManager struct {
-	devices    map[string]*Device
-	keys       []sortableKey
-	configFile string
-	fileHead   string
+	devices     map[string]*Device
+	keys        []sortableKey
+	configFile  string
+	fileHead    string
+	restartChan chan bool
+	stopChan    chan bool
 	sync.RWMutex
 }
 
 func NewDeviceManager(configFile string) *DeviceManager {
 	return &DeviceManager{
-		devices:    make(map[string]*Device),
-		keys:       make([]sortableKey, 0),
-		configFile: configFile,
+		devices:     make(map[string]*Device),
+		keys:        make([]sortableKey, 0),
+		configFile:  configFile,
+		restartChan: make(chan bool, 256),
+		stopChan:    make(chan bool),
 	}
 }
 
@@ -102,6 +108,36 @@ func (m *DeviceManager) Load() error {
 	return nil
 }
 
+func (dm *DeviceManager) Start(dhcpdRestart string) {
+	go func() {
+		cmdPieces := strings.Split(dhcpdRestart, " ")
+		for {
+			// Prevent the DHCP service from restarting more than
+			// once per minute.
+			time.Sleep(time.Minute)
+			select {
+			case _ = <-dm.restartChan:
+				log.Println("Restarting DHCP service.")
+				// Don't let the file change while dhcpd is reloading
+				dm.Lock()
+				rp := exec.Command(cmdPieces[0], cmdPieces[1:]...)
+				err := rp.Run()
+				if err != nil {
+					log.Fatal(err)
+				}
+				// Restart the dhcp service
+				dm.Unlock()
+			case _ = <-dm.stopChan:
+				log.Println("Stopping device manager.")
+			}
+		}
+	}()
+}
+
+func (dm *DeviceManager) Stop() {
+	dm.stopChan <- true
+}
+
 func (dm *DeviceManager) Save() {
 	dm.Lock()
 	defer dm.Unlock()
@@ -109,6 +145,7 @@ func (dm *DeviceManager) Save() {
 	if err != nil {
 		log.Println(err)
 	}
+	dm.restartChan <- true
 }
 
 func (dm *DeviceManager) Get(mac string) *Device {

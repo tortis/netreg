@@ -38,9 +38,10 @@ func init() {
 	flag.IntVar(&ldapPort, "ldap-port", 389, "Port to connect to LDAP server on.")
 	flag.StringVar(&ldapSearchPath, "ldap-search-path", "uid=%s,ou=people,dc=math,dc=nor,dc=ou,dc=edu", "Format string for ldap bind DN")
 	flag.StringVar(&dhcpdConfigFile, "dhcpd-conf-file", "/etc/dhcp/dhcpd.conf", "dhcpd config file to use.")
-	flag.StringVar(&dhcpdRestartCmd, "dhcpd-restart", "service dhcpd restart", "command to restart the dhcp server.")
+	flag.StringVar(&dhcpdRestartCmd, "dhcpd-restart", "/sbin/service dhcpd restart", "command to restart the dhcp server.")
 
 	// Generate a random token key
+	key = make([]byte, 16)
 	rand.Read(key)
 }
 
@@ -53,12 +54,15 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Loaded ", deviceManager.NumDevices(), " devices.")
+	deviceManager.Start(dhcpdRestartCmd)
+	defer deviceManager.Stop()
 
 	// Start the ldap connection
 	err = ldapConnect()
 	if err != nil {
 		log.Fatal("Failed to connect to LDAP server. Stopping")
 	}
+	defer ldapConn.Close()
 
 	// Create the routing mux
 	router := mux.NewRouter()
