@@ -9,10 +9,9 @@ import (
 	"net"
 	"net/http"
 	"regexp"
-	"time"
 
+	"github.com/go-ldap/ldap"
 	"github.com/gorilla/mux"
-	"github.com/mavricknz/ldap"
 
 	"github.com/tortis/netreg/devm"
 	"github.com/tortis/netreg/token"
@@ -28,7 +27,7 @@ var ldapPort int
 var dhcpdConfigFile string
 var dhcpdRestartCmd string
 
-var ldapConn *ldap.LDAPConnection
+var ldapConn *ldap.Conn
 var deviceManager *devm.DeviceManager
 var key []byte
 
@@ -58,11 +57,13 @@ func main() {
 	defer deviceManager.Stop()
 
 	// Start the ldap connection
-	err = ldapConnect()
+	log.Printf("Attempting to connect to LDAP on: %s:%d\n", ldapServer, ldapPort)
+	ldapConn, err = ldap.Dial("tcp", fmt.Sprintf("%s:%d", ldapServer, ldapPort))
 	if err != nil {
-		log.Fatal("Failed to connect to LDAP server. Stopping")
+		log.Fatal("Failed to connect to LDAP server:", err)
 	}
 	defer ldapConn.Close()
+	log.Println("LDAP connection established.")
 
 	// Create the routing mux
 	router := mux.NewRouter()
@@ -75,17 +76,6 @@ func main() {
 
 	log.Println("Serving requests on ", webPort)
 	log.Fatal(http.ListenAndServe(webPort, router))
-}
-
-func ldapConnect() error {
-	ldapConn = ldap.NewLDAPConnection(ldapServer, uint16(ldapPort))
-	ldapConn.NetworkConnectTimeout = time.Second * 10
-	ldapConn.ReadTimeout = time.Second * 10
-	err := ldapConn.Connect()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -114,26 +104,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	ldapUser := fmt.Sprintf(ldapSearchPath, username)
 	lde := ldapConn.Bind(ldapUser, password)
 	if lde != nil {
-		// Check if the connection is still alive
-		ldapError := lde.(*ldap.LDAPError)
-		if ldapError.ResultCode == ldap.ErrorClosing {
-			// The LDAP connection is down, attempt to reconnect
-			log.Println("The LDAP connection has been lost. Attempting to reconnect.")
-			err := ldapConnect()
-			if err != nil {
-				log.Println("Failed to reestablish LDAP connection. Quiting.")
-				http.Error(w, "Oops, could not connect to user database.", http.StatusInternalServerError)
-				log.Fatal(err)
-			}
-			log.Println("LDAP connection reestablished.")
-			loginHandler(w, r)
-			return
-		} else {
-			log.Println("User failed to authenticate")
-			http.Error(w, "Incorrect username or password", http.StatusBadRequest)
-			log.Println("[LOGIN](fail) ", username)
-			return
-		}
+		log.Println("User failed to authenticate")
+		http.Error(w, "Incorrect username or password", http.StatusBadRequest)
+		log.Println("[LOGIN](fail) ", username)
+		return
 	}
 
 	// Create JWT

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-fsnotify/fsnotify"
 )
 
 type DeviceManager struct {
@@ -21,6 +23,8 @@ type DeviceManager struct {
 	fileHead    string
 	restartChan chan bool
 	stopChan    chan bool
+	watcher     *fsnotify.Watcher
+	ignoreWrite bool
 	sync.RWMutex
 }
 
@@ -35,6 +39,11 @@ func NewDeviceManager(configFile string) *DeviceManager {
 }
 
 func (m *DeviceManager) Load() error {
+	// Dump device map
+	m.devices = make(map[string]*Device)
+	m.keys = make([]sortableKey, 0)
+	m.fileHead = ""
+
 	m.Lock()
 	defer m.Unlock()
 	file, err := os.Open(m.configFile)
@@ -109,6 +118,7 @@ func (m *DeviceManager) Load() error {
 }
 
 func (dm *DeviceManager) Start(dhcpdRestart string) {
+	// Restart device manager when necessary
 	go func() {
 		cmdPieces := strings.Split(dhcpdRestart, " ")
 		for {
@@ -123,12 +133,51 @@ func (dm *DeviceManager) Start(dhcpdRestart string) {
 				rp := exec.Command(cmdPieces[0], cmdPieces[1:]...)
 				err := rp.Run()
 				if err != nil {
-					log.Fatal(err)
+					log.Println(err)
 				}
 				// Restart the dhcp service
 				dm.Unlock()
 			case _ = <-dm.stopChan:
 				log.Println("Stopping device manager.")
+				return
+			}
+		}
+	}()
+
+	// Listen for changes in the config file
+	go func() {
+		var err error
+		dm.watcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal("Could not create fswatcher: ", err)
+		}
+		err = dm.watcher.Add(dm.configFile)
+		if err != nil {
+			log.Fatal("Could not start watching config file: ", err)
+		}
+		for {
+			select {
+			case event := <-dm.watcher.Events:
+				// File is removed on edit
+				if event.Op == fsnotify.Remove {
+					time.Sleep(time.Second)
+					log.Println("Reloading config file.")
+					dm.Load()
+					dm.watcher.Add(dm.configFile)
+				}
+
+				if event.Op == fsnotify.Write {
+					if dm.ignoreWrite {
+						dm.ignoreWrite = false
+					} else {
+						log.Println("Reloading config file.")
+						dm.Load()
+					}
+				}
+			case err := <-dm.watcher.Errors:
+				log.Println("Watcher error: ", err)
+			case _ = <-dm.stopChan:
+				return
 			}
 		}
 	}()
@@ -136,11 +185,13 @@ func (dm *DeviceManager) Start(dhcpdRestart string) {
 
 func (dm *DeviceManager) Stop() {
 	dm.stopChan <- true
+	dm.watcher.Close()
 }
 
 func (dm *DeviceManager) Save() {
 	dm.Lock()
 	defer dm.Unlock()
+	dm.ignoreWrite = true
 	err := ioutil.WriteFile(dm.configFile, []byte(dm.String()), 0660)
 	if err != nil {
 		log.Println(err)
