@@ -135,7 +135,9 @@ func (dm *DeviceManager) Start(dhcpdRestart string) {
 				if err != nil {
 					log.Println(err)
 				}
-				// Restart the dhcp service
+				// Clear the restartChannel
+				dm.restartChan = make(chan bool, 256)
+
 				dm.Unlock()
 			case _ = <-dm.stopChan:
 				log.Println("Stopping device manager.")

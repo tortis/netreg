@@ -148,19 +148,21 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 	};
 
 	$scope.deleteDevice = function(dev) {
-		$http({
-			method: 'DELETE',
-			url: '/devices/'+dev.MAC,
-			headers: {'Authorization': $window.localStorage['token']}
-		}).success(function(data) {
-			$scope.load();
-			$scope.message = "Successfully deleted " + dev.Device;
-		}).error(function(data, status) {
-			if (status >= 400 && status < 500) {
-				$scope.error = data;
-			} else {
-				$scope.error = "Oops! Server error, please try again.";
-			}
-		});
+		if ($window.confirm("Are you sure you want to delete this entry?")) {
+			$http({
+				method: 'DELETE',
+				url: '/devices/'+dev.MAC,
+				headers: {'Authorization': $window.localStorage['token']}
+			}).success(function(data) {
+				$scope.load();
+				$scope.message = "Successfully deleted " + dev.Device;
+			}).error(function(data, status) {
+				if (status >= 400 && status < 500) {
+					$scope.error = data;
+				} else {
+					$scope.error = "Oops! Server error, please try again.";
+				}
+			});
+		}
 	}
 });

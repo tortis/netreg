@@ -17,15 +17,14 @@ import (
 	"github.com/tortis/netreg/token"
 )
 
-const ADMIN_USERNAME = "netregadmin"
-const ADMIN_PASSWORD = "password"
-
 var ldapSearchPath string
 var webPort string
 var ldapServer string
 var ldapPort int
 var dhcpdConfigFile string
 var dhcpdRestartCmd string
+var htmlDir string
+var adminUser string
 
 var ldapConn *ldap.Conn
 var deviceManager *devm.DeviceManager
@@ -38,6 +37,8 @@ func init() {
 	flag.StringVar(&ldapSearchPath, "ldap-search-path", "uid=%s,ou=people,dc=math,dc=nor,dc=ou,dc=edu", "Format string for ldap bind DN")
 	flag.StringVar(&dhcpdConfigFile, "dhcpd-conf-file", "/etc/dhcp/dhcpd.conf", "dhcpd config file to use.")
 	flag.StringVar(&dhcpdRestartCmd, "dhcpd-restart", "/sbin/service dhcpd restart", "command to restart the dhcp server.")
+	flag.StringVar(&htmlDir, "htmldir", "./public", "Path to the HTML directory")
+	flag.StringVar(&adminUser, "adminuser", "dfindley", "Username that will receive admin privs.")
 
 	// Generate a random token key
 	key = make([]byte, 16)
@@ -72,7 +73,7 @@ func main() {
 	router.HandleFunc("/devices/{did}", removeDevice).Methods("DELETE")
 	router.HandleFunc("/devices", addDevice).Methods("POST")
 	router.HandleFunc("/devices/{did}", updateDevice).Methods("PUT")
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./public")))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir(htmlDir)))
 
 	log.Println("Serving requests on ", webPort)
 	log.Fatal(http.ListenAndServe(webPort, router))
@@ -82,23 +83,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the username and password.
 	username := r.FormValue("un")
 	password := r.FormValue("pw")
-
-	// Check if admin login
-	if username == ADMIN_USERNAME {
-		if password == ADMIN_PASSWORD {
-			t := token.NewToken(token.EXP_6HOUR)
-			t.Contents["username"] = username
-			t.Contents["admin"] = "yes"
-			res, err := t.Sign(key)
-			if err != nil {
-				log.Println("Failed to generate token for user.")
-				http.Error(w, "Could not generate token", http.StatusInternalServerError)
-				return
-			}
-			w.Write(res)
-			return
-		}
-	}
 
 	// Attempt LDAP bind
 	ldapUser := fmt.Sprintf(ldapSearchPath, username)
@@ -113,6 +97,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create JWT
 	t := token.NewToken(token.EXP_6HOUR)
 	t.Contents["username"] = username
+	if username == adminUser {
+		t.Contents["admin"] = "yes"
+	}
 	res, err := t.Sign(key)
 	if err != nil {
 		log.Println("Failed to generate token for user.")
@@ -132,7 +119,7 @@ func listDevices(w http.ResponseWriter, r *http.Request) {
 
 	// Loop up devices using the device manager
 	var devices []*devm.Device
-	if t.Contents["username"] == ADMIN_USERNAME {
+	if t.Contents["admin"] == "yes" {
 		devices = deviceManager.ListAll()
 	} else {
 		devices = deviceManager.ListForUser(t.Contents["username"])
@@ -163,7 +150,7 @@ func removeDevice(w http.ResponseWriter, r *http.Request) {
 	if deviceManager.Contains(mac) {
 		dev := deviceManager.Get(mac)
 		// Check if caller is owner
-		if t.Contents["username"] != dev.Owner && t.Contents["username"] != ADMIN_USERNAME {
+		if t.Contents["username"] != dev.Owner && t.Contents["admin"] != "yes" {
 			http.Error(w, "No such device exists.", http.StatusBadRequest)
 			return
 		}
@@ -204,7 +191,7 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 	newDevice.MAC = mac.String()
 	re := regexp.MustCompile("[^0-9a-zA-Z\\-]")
 	newDevice.Device = re.ReplaceAllString(newDevice.Device, "")
-	if t.Contents["username"] != ADMIN_USERNAME {
+	if t.Contents["admin"] != "yes" {
 		newDevice.Owner = t.Contents["username"]
 	}
 	newDevice.Name = newDevice.Owner + "-" + newDevice.Device
