@@ -23,6 +23,8 @@ var ldapServer string
 var ldapPort int
 var dhcpdConfigFile string
 var dhcpdRestartCmd string
+var hostHTML bool
+var enableCORS bool
 var htmlDir string
 var adminUser string
 
@@ -39,6 +41,8 @@ func init() {
 	flag.StringVar(&dhcpdRestartCmd, "dhcpd-restart", "/sbin/service dhcpd restart", "command to restart the dhcp server.")
 	flag.StringVar(&htmlDir, "htmldir", "./public", "Path to the HTML directory")
 	flag.StringVar(&adminUser, "adminuser", "dfindley", "Username that will receive admin privs.")
+	flag.BoolVar(&hostHTML, "hosthtml", false, "If set, the the server will also host static html from 'htmldir'")
+	flag.BoolVar(&enableCORS, "enablecors", true, "If set, the server will send cross-origin headers.")
 
 	// Generate a random token key
 	key = make([]byte, 16)
@@ -73,10 +77,36 @@ func main() {
 	router.HandleFunc("/devices/{did}", removeDevice).Methods("DELETE")
 	router.HandleFunc("/devices", addDevice).Methods("POST")
 	router.HandleFunc("/devices/{did}", updateDevice).Methods("PUT")
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir(htmlDir)))
+
+	// Server HTML
+	if hostHTML {
+		router.PathPrefix("/").Handler(http.FileServer(http.Dir(htmlDir)))
+	}
+
+	// Add middleware for CORS
+	if enableCORS {
+		http.Handle("/", corsMiddleware(router))
+	} else {
+		http.Handle("/", router)
+	}
 
 	log.Println("Serving requests on ", webPort)
-	log.Fatal(http.ListenAndServe(webPort, router))
+	log.Fatal(http.ListenAndServe(webPort, nil))
+}
+
+func corsMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("[CORS] OPTIONS handler called.")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {

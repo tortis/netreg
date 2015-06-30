@@ -160,19 +160,20 @@ func (dm *DeviceManager) Start(dhcpdRestart string) {
 		for {
 			select {
 			case event := <-dm.watcher.Events:
+				log.Println("Watcher event: " + event.String())
 				// File is removed on edit
 				if event.Op == fsnotify.Remove {
+					if !dm.ignoreWrite {
+						log.Println("Detected config file edit (replaced)")
+					}
 					time.Sleep(time.Second)
-					log.Println("Reloading config file.")
 					dm.Load()
 					dm.watcher.Add(dm.configFile)
 				}
 
 				if event.Op == fsnotify.Write {
-					if dm.ignoreWrite {
-						dm.ignoreWrite = false
-					} else {
-						log.Println("Reloading config file.")
+					if !dm.ignoreWrite {
+						log.Println("Detected config file edit.")
 						dm.Load()
 					}
 				}
@@ -194,6 +195,8 @@ func (dm *DeviceManager) Save() {
 	dm.Lock()
 	defer dm.Unlock()
 	dm.ignoreWrite = true
+	go func() { time.Sleep(time.Second); dm.ignoreWrite = false }()
+	log.Println("Saving device manager, writing config file.")
 	err := ioutil.WriteFile(dm.configFile, []byte(dm.String()), 0660)
 	if err != nil {
 		log.Println(err)

@@ -19,15 +19,15 @@
 				<th>MAC Address</th>
 				<th>Actions</th>
 			</tr>
-			<tr ng-repeat="device in devices" ng-class="{success: device.Enabled}">
+			<tr class="nr-dev-row" ng-repeat="device in devices" ng-class="{success: device.Enabled}">
 				<td ng-hide="device.editing">{{device.Device}}</td>
-				<td ng-show="device.editing"><input type="text" ng-model="device.updated.Device"></td>
+				<td ng-show="device.editing"><input class="nr-input" type="text" ng-model="device.updated.Device"></td>
 				<td ng-hide="device.editing && isAdmin">{{device.Owner}}</td>
-				<td ng-show="device.editing && isAdmin"><input type="text" ng-model="device.updated.Owner"></td>
+				<td ng-show="device.editing && isAdmin"><input class="nr-input" type="text" ng-model="device.updated.Owner"></td>
 				<td ng-hide="device.editing">{{device.MAC}}</td>
-				<td ng-show="device.editing"><input type="text" ng-model="device.updated.MAC"></td>
+				<td ng-show="device.editing"><input type="text" class="nr-input" ng-model="device.updated.MAC"></td>
 				<td>
-					<div ng-hide="device.editing">
+					<div class="btn-group" ng-hide="device.editing">
 						<button ng-click="toggleEnable(device)" style="min-width: 55px;" type="button" class="btn btn-default btn-xs">
 							{{device.Enabled ? "Disable" : "Enable"}}
 						</button>
@@ -38,7 +38,7 @@
 							<span class="glyphicon glyphicon-trash"</span>
 						</button>
 					</div>
-					<div ng-show="device.editing">
+					<div class="btn-group" ng-show="device.editing">
 						<button ng-click="updateDevice(device)" type="button" class="btn btn-default btn-xs">
 							<span class="glyphicon glyphicon-ok"</span>
 						</button>
@@ -51,21 +51,23 @@
 			<tr ng-show="devices.length == 0">
 				<td colspan="4"><i>No devices registered.</i></td>
 			</tr>
-			<tr ng-hide="devices.adding">
+			<tr class="nr-dev-row" ng-hide="devices.adding">
 				<td colspan="4"><button ng-click="startAdding()" type="button" class="btn btn-success btn-xs">Add a New Device</button></td>
 			</tr>
 			<tr ng-show="devices.adding">
-				<td><input type="text" ng-model="devices.newDev.Device" placeholder="My-Device"></td>
-				<td ng-show="isAdmin"><input type="text" ng-model="devices.newDev.Owner" placeholder="username"></td>
+				<td><input type="text" class="nr-input" ng-model="devices.newDev.Device" placeholder="My-Device"></td>
+				<td ng-show="isAdmin"><input type="text" class="nr-input" ng-model="devices.newDev.Owner" placeholder="username"></td>
 				<td ng-hide="isAdmin">Me</td>
-				<td><input type="text" ng-model="devices.newDev.MAC" placeholder="00:00:00:00:00:00"></td>
+				<td><input type="text" class="nr-input" ng-model="devices.newDev.MAC" placeholder="00:00:00:00:00:00"></td>
 				<td>
-					<button ng-click="addDevice()" type="button" class="btn btn-default btn-xs">
-						<span class="glyphicon glyphicon-ok"</span>
-					</button>
-					<button ng-click="devices.adding=false" type="button" class="btn btn-default btn-xs">
-						<span class="glyphicon glyphicon-remove"</span>
-					</button>
+					<div class="btn-group">
+						<button ng-click="addDevice()" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-ok"</span>
+						</button>
+						<button ng-click="devices.adding=false" type="button" class="btn btn-default btn-xs">
+							<span class="glyphicon glyphicon-remove"</span>
+						</button>
+					</div>
 				</td>
 			</tr>
 		</table>

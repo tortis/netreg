@@ -1,4 +1,5 @@
 var netregApp = angular.module("NetregApp", ['ngRoute']);
+var apiUrl = "http://localhost:3000";
 
 netregApp.config(function($routeProvider, $locationProvider) {
 	$routeProvider
@@ -16,7 +17,7 @@ netregApp.controller("LoginCtrl", function($scope, $http, $location, $window) {
 	$scope.login = function(user) {
 		$http({
 			method: 'POST',
-			url: '/login',
+			url: apiUrl+'/login',
 			data: user,
 			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 			transformRequest: function(obj) {
@@ -70,7 +71,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 		$scope.message = $scope.error = null;
 		$http({
 			method: 'GET',
-			url: '/devices',
+			url: apiUrl+'/devices',
 			headers: {'Authorization': $window.localStorage['token']}
 		}).success(function(data) {
 			$scope.devices = data;
@@ -114,7 +115,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 		console.log("Updating device: "+dev.Name);
 		$http({
 			method: 'PUT',
-			url: '/devices/' + dev.MAC,
+			url: apiUrl+'/devices/' + dev.MAC,
 			data: dev.updated,
 			headers: {'Authorization': $window.localStorage['token']}
 		}).success(function(data) {
@@ -132,7 +133,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 	$scope.addDevice = function() {
 		$http({
 			method: 'POST',
-			url: '/devices',
+			url: apiUrl+'/devices',
 			data: $scope.devices.newDev,
 			headers: {'Authorization': $window.localStorage['token']}
 		}).success(function(data) {
@@ -151,7 +152,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 		if ($window.confirm("Are you sure you want to delete this entry?")) {
 			$http({
 				method: 'DELETE',
-				url: '/devices/'+dev.MAC,
+				url: apiUrl+'/devices/'+dev.MAC,
 				headers: {'Authorization': $window.localStorage['token']}
 			}).success(function(data) {
 				$scope.load();

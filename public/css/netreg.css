@@ -1,3 +1,11 @@
 body {
 	margin-top: 20px;
 }
+
+.nr-dev-row {
+	height: 43px;
+}
+
+.nr-input {
+	width: 120px;
+}
