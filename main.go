@@ -28,7 +28,6 @@ var enableCORS bool
 var htmlDir string
 var adminUser string
 
-var ldapConn *ldap.Conn
 var deviceManager *devm.DeviceManager
 var key []byte
 
@@ -60,15 +59,6 @@ func main() {
 	log.Println("Loaded ", deviceManager.NumDevices(), " devices.")
 	deviceManager.Start(dhcpdRestartCmd)
 	defer deviceManager.Stop()
-
-	// Start the ldap connection
-	log.Printf("Attempting to connect to LDAP on: %s:%d\n", ldapServer, ldapPort)
-	ldapConn, err = ldap.Dial("tcp", fmt.Sprintf("%s:%d", ldapServer, ldapPort))
-	if err != nil {
-		log.Fatal("Failed to connect to LDAP server:", err)
-	}
-	defer ldapConn.Close()
-	log.Println("LDAP connection established.")
 
 	// Create the routing mux
 	router := mux.NewRouter()
@@ -110,6 +100,16 @@ func corsMiddleware(h http.Handler) http.Handler {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
+	// Start the ldap connection
+	var ldapConn *ldap.Conn
+	var err error
+	ldapConn, err = ldap.Dial("tcp", fmt.Sprintf("%s:%d", ldapServer, ldapPort))
+	if err != nil {
+		log.Fatal("Failed to connect to LDAP server:", err)
+		http.Error(w, "Could not connect to LDAP database", http.StatusInternalServerError)
+	}
+	defer ldapConn.Close()
+
 	// Get the username and password.
 	username := r.FormValue("un")
 	password := r.FormValue("pw")
