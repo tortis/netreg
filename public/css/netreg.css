@@ -9,3 +9,19 @@ body {
 .nr-input {
 	width: 120px;
 }
+
+#login-un {
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+	margin-bottom: -1px;
+}
+
+#login-pw {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+#login-form {
+	width: 330px;
+	margin: 0 auto;
+}
