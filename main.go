@@ -27,6 +27,8 @@ var hostHTML bool
 var enableCORS bool
 var htmlDir string
 var adminUser string
+var pubKey string
+var privKey string
 
 var deviceManager *devm.DeviceManager
 var key []byte
@@ -42,6 +44,8 @@ func init() {
 	flag.StringVar(&adminUser, "adminuser", "dfindley", "Username that will receive admin privs.")
 	flag.BoolVar(&hostHTML, "hosthtml", false, "If set, the the server will also host static html from 'htmldir'")
 	flag.BoolVar(&enableCORS, "enablecors", true, "If set, the server will send cross-origin headers.")
+	flag.StringVar(&pubKey, "publickey", "public_key.pem", "Path to the public key file.")
+	flag.StringVar(&privKey, "privatekey", "private_key.pem", "Path to the private key file")
 
 	// Generate a random token key
 	key = make([]byte, 16)
@@ -81,7 +85,7 @@ func main() {
 	}
 
 	log.Println("Serving requests on ", webPort)
-	log.Fatal(http.ListenAndServe(webPort, nil))
+	log.Fatal(http.ListenAndServeTLS(webPort, pubKey, privKey, nil))
 }
 
 func corsMiddleware(h http.Handler) http.Handler {

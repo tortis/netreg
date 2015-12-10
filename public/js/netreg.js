@@ -1,5 +1,5 @@
 var netregApp = angular.module("NetregApp", ['ngRoute']);
-var apiUrl = "http://localhost:3000";
+var apiUrl = "https://localhost:3000";
 
 netregApp.config(function($routeProvider, $locationProvider) {
 	$routeProvider
