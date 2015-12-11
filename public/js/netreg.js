@@ -107,6 +107,7 @@ netregApp.controller("HomeCtrl", function($scope, $http, $window, $location) {
 		dev.updated = {};
 		dev.updated.MAC = dev.MAC;
 		dev.updated.Device = dev.Device;
+		dev.updated.Owner = dev.Owner;
 		dev.updated.Enabled = !dev.Enabled;
 		$scope.updateDevice(dev);
 	}

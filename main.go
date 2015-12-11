@@ -18,7 +18,7 @@ import (
 )
 
 var ldapSearchPath string
-var webPort string
+var webPort int
 var ldapServer string
 var ldapPort int
 var dhcpdConfigFile string
@@ -34,7 +34,7 @@ var deviceManager *devm.DeviceManager
 var key []byte
 
 func init() {
-	flag.StringVar(&webPort, "web-port", ":3000", "port that the web server will listen on.")
+	flag.IntVar(&webPort, "web-port", 3000, "port that the web server will listen on.")
 	flag.StringVar(&ldapServer, "ldap-server", "localhost", "LDAP server to connect to.")
 	flag.IntVar(&ldapPort, "ldap-port", 389, "Port to connect to LDAP server on.")
 	flag.StringVar(&ldapSearchPath, "ldap-search-path", "uid=%s,ou=people,dc=math,dc=nor,dc=ou,dc=edu", "Format string for ldap bind DN")
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	log.Println("Serving requests on ", webPort)
-	log.Fatal(http.ListenAndServeTLS(webPort, pubKey, privKey, nil))
+	log.Fatal(http.ListenAndServeTLS(fmt.Sprintf(":%d", webPort), pubKey, privKey, nil))
 }
 
 func corsMiddleware(h http.Handler) http.Handler {
@@ -285,7 +285,10 @@ func updateDevice(w http.ResponseWriter, r *http.Request) {
 	changedDevice.MAC = mac.String()
 	re := regexp.MustCompile("[^0-9a-zA-Z\\-]")
 	changedDevice.Device = re.ReplaceAllString(changedDevice.Device, "")
-	changedDevice.Owner = oldDev.Owner
+	// Only enforce owner if caller is not an admin
+	if t.Contents["admin"] != "yes" {
+		changedDevice.Owner = oldDev.Owner
+	}
 	changedDevice.Name = changedDevice.Owner + "-" + changedDevice.Device
 
 	// If the mac has not changed

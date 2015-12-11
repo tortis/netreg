@@ -1,0 +1,9 @@
+[Unit]
+Description=OU Math Netreg Web Interface
+
+[Service]
+User=root
+ExecStart=/opt/netreg/netreg 
+
+[Install]
+WantedBy=multi-user.target
