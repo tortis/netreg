@@ -1,0 +1,16 @@
+Math NetReg App Install
+-----------------------
+
+Copy netreg.service into /etc/systemd/system
+Check/Update the flags passed to netreg in netreg.service
+
+Copy the public dir somewhere reasonable. eg (/opt/netreg/public or /var/www/netreg)
+Update the params in netreg.service to match
+
+Copy the netreg binary to /opt/netreg or /usr/(local)/bin
+Update the params in netreg.service to match
+
+Run:
+systemctl --daemon-reload
+systemctl enable netreg
+systemctl start netreg

@@ -3,7 +3,7 @@ Description=OU Math Netreg Web Interface
 
 [Service]
 User=root
-ExecStart=/opt/netreg/netreg 
+ExecStart=/opt/netreg/netreg -adminuser=dfindley -hosthtml=true -htmldir=/opt/netreg/public -ldap-server=origin.math.nor.ou.edu -privatekey=/etc/pki/tls/private/math.ou.edu.key -publickey=/etc/pki/tls/certs/math.ou.edu.crt -web-port=3000                    
 
 [Install]
 WantedBy=multi-user.target
